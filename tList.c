@@ -7,12 +7,15 @@ struct node **list_init(){
 	return head;
 }
 
-void list_clear(struct node *list) {
-    while (list != NULL) {
-        struct node *tmp = list;
-        list = list->next;
-        free(tmp);
+void list_clear(struct node **head) {
+	struct node *curr = *head;    
+	while (curr != NULL) {
+        struct node *tmp = curr;
+        curr = curr->next;
+		free((tmp->threadContext->uc_stack).ss_sp);
+		free(tmp);
     }
+	*head = NULL;
 }
 
 void list_print(const struct node *list) {
@@ -23,7 +26,23 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-int list_delete(struct node **head) { //delete the last item of a list
+struct node *pop(struct node**head){//returns the last item of the list
+	assert(head != NULL);
+
+	if(*head ==NULL){ // if the list is empty
+		return NULL;
+	}
+
+	struct node *curr = *head;
+	while(curr->next != NULL){
+		curr = curr->next;
+	}//end while
+
+	return curr;
+
+}
+
+int list_delete(struct node **head) { //delete the last item of a list. Returns -1 if an unexpected failure arises; returns 0 if the list is empty; returns 1 is deletion is successfully carried out
 
 	if(head == NULL){
 		printf("Error! List_delete() receives a NULL node**.\n");
@@ -35,7 +54,8 @@ int list_delete(struct node **head) { //delete the last item of a list
 	}//end if
 
 	struct node *curr = *head;
-	if(curr->next == NULL){ //if the list contains only 1 item, delete it and then return 1
+	if(curr->next == NULL){ //if the list contains only 1 item, delete it and then return 1	
+		free((curr->threadContext->uc_stack).ss_sp);
 		free(curr);
 		*head = NULL;
 		return 1;
@@ -45,12 +65,13 @@ int list_delete(struct node **head) { //delete the last item of a list
 	while(curr->next->next != NULL){
 		curr = curr->next;
 	}//end while
+	free((curr->threadContext->uc_stack).ss_sp);
 	free(curr->next);
 	curr->next = NULL;
 	return 1;
 }
 
-int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the head of the list
+int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list. Returns -1 if an unexpected failure arises; returns 1 if item successfully appended. 
 
 	if(head == NULL){
 		printf("Error! List_append() receives a NULL node**.\n");
@@ -67,3 +88,24 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 	(*head)->next = tmp;
 	return 1;
 }
+
+/*
+int main(){
+	ucontext_t ctx1;
+	ucontext_t ctx2;
+	ucontext_t ctx3;
+
+	getcontext(&ctx1);
+	getcontext(&ctx2);
+	getcontext(&ctx3);
+	struct node **head = list_init();
+	list_append(&ctx1, 1, head);
+	list_append(&ctx2, 2, head);
+	list_append(&ctx3, 3, head);
+	list_print(*head);
+	list_clear(head);
+	list_print(*head);
+
+	return 0;
+}//end main
+*/

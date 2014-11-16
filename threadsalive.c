@@ -8,8 +8,100 @@
 #include <assert.h>
 #include <strings.h>
 #include <string.h>
-#include "list.h"
+#include "tList.h"
 #include "threadsalive.h"
+
+/* ***************************** 
+     list functions
+   ***************************** */
+
+struct node **list_init(){
+	struct node **head = malloc(sizeof(struct node *));
+	*head = NULL;
+	return head;
+}
+
+void list_clear(struct node **head) {
+	struct node *curr = *head;    
+	while (curr != NULL) {
+        struct node *tmp = curr;
+        curr = curr->next;
+		free((tmp->threadContext->uc_stack).ss_sp);
+		free(tmp);
+    }
+	*head = NULL;
+}
+
+void list_print(const struct node *list) {
+    printf("Thread list_print\n");
+    while (list != NULL) {
+        printf("Thread %d\n", list->threadNum);
+        list = list->next;
+    }
+}//end list_print
+
+struct node *pop(struct node**head){//returns the last item of the list
+	assert(head != NULL);
+
+	if(*head ==NULL){ // if the list is empty
+		return NULL;
+	}
+
+	struct node *curr = *head;
+	while(curr->next != NULL){
+		curr = curr->next;
+	}//end while
+
+	return curr;
+
+}
+
+int list_delete(struct node **head) { //delete the last item of a list. Returns -1 if an unexpected failure arises; returns 0 if the list is empty; returns 1 is deletion is successfully carried out
+
+	if(head == NULL){
+		printf("Error! List_delete() receives a NULL node**.\n");
+		return -1;
+	}//end if
+
+	if(*head == NULL){ //if the list is empty, return 0
+		return 0;
+	}//end if
+
+	struct node *curr = *head;
+	if(curr->next == NULL){ //if the list contains only 1 item, delete it and then return 1	
+		free((curr->threadContext->uc_stack).ss_sp);
+		free(curr);
+		*head = NULL;
+		return 1;
+	}//end if
+
+	//if the list contains 2 or more items
+	while(curr->next->next != NULL){
+		curr = curr->next;
+	}//end while
+	free((curr->threadContext->uc_stack).ss_sp);
+	free(curr->next);
+	curr->next = NULL;
+	return 1;
+}
+
+int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list. Returns -1 if an unexpected failure arises; returns 1 if item successfully appended. 
+
+	if(head == NULL){
+		printf("Error! List_append() receives a NULL node**.\n");
+		return -1;
+	}//end if
+
+	struct node *tmp = NULL;
+	if(*head != NULL){ // if the list is not empty
+		tmp = *head;	
+	}//end if
+	*head = malloc(sizeof(struct node));
+	(*head)->threadContext = ctx;
+	(*head)->threadNum = threadNum;
+	(*head)->next = tmp;
+	return 1;
+}
 
 /* ***************************** 
      stage 1 library functions
@@ -17,15 +109,26 @@
 
 static struct node **ready;
 static struct node **waiting;
+static ucontext_t mainthread;
 
-void ta_libinit(void) {
+void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
+	swapcontext(&mainthread, &mainthread);
 	return;
 }
 
 void ta_create(void (*func)(void *), void *arg) {
-    return;
+	#define STACKSIZE 128000
+	unsigned char *stack_space = (unsigned char*)malloc(STACKSIZE);
+	ucontext_t *ctx = malloc(sizeof(ucontext_t));
+	getcontext(ctx);
+	ctx->uc_stack.ss_sp = stack_space;
+    ctx[1].uc_stack.ss_size = STACKSIZE;
+	ctx->uc_link = &mainthread; 
+	makecontext(ctx, func, 1, arg);
+
+	return;
 }
 
 void ta_yield(void) {
