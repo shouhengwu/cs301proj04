@@ -1,3 +1,8 @@
+
+#ifndef _TLIST_GUARD_
+#define __TLIST_GUARD_
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,3 +26,4 @@ int list_delete(struct node **);
 
 int list_append(ucontext_t *, int, struct node **);
 
+#endif

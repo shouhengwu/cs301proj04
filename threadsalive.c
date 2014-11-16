@@ -8,15 +8,20 @@
 #include <assert.h>
 #include <strings.h>
 #include <string.h>
-
+#include "list.h"
 #include "threadsalive.h"
 
 /* ***************************** 
      stage 1 library functions
    ***************************** */
 
+static struct node **ready;
+static struct node **waiting;
+
 void ta_libinit(void) {
-    return;
+	ready = list_init();
+	waiting = list_init();
+	return;
 }
 
 void ta_create(void (*func)(void *), void *arg) {

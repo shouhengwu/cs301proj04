@@ -1,10 +1,5 @@
-#include <tList.h>
+#include "tList.h"
 
-struct node {
-	int threadNum;//debug
-    ucontext_t *threadContext;
-    struct node *next; 
-};
 
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
@@ -72,4 +67,3 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 	(*head)->next = tmp;
 	return 1;
 }
-
