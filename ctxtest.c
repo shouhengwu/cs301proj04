@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 {
 #define STACKSIZE 8192
     unsigned char *stack1 = (unsigned char *)malloc(STACKSIZE);
-    unsigned char *stack2 = (unsigned char *)malloc(STACKSIZE);   
+    unsigned char *stack2 = (unsigned char *)malloc(STACKSIZE);
 
     assert(stack1 && stack2);
 
