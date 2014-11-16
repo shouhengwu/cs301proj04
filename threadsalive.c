@@ -42,7 +42,7 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-struct node *pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
+struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
 	assert(head != NULL);
 
 	if(*head ==NULL){ // if the list is empty
@@ -64,12 +64,9 @@ struct node *pop(struct node**head){//removes the last item from the list withou
 
 }
 
-int list_delete(struct node **head) { //delete the last item of a list. Returns -1 if an unexpected failure arises; returns 0 if the list is empty; returns 1 is deletion is successfully carried out
+int list_delete(struct node **head) { //delete the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
 
-	if(head == NULL){
-		printf("Error! List_delete() receives a NULL node**.\n");
-		return -1;
-	}//end if
+	assert(head != NULL);
 
 	if(*head == NULL){ //if the list is empty, return 0
 		return 0;
@@ -95,12 +92,9 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 	return 1;
 }
 
-int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list. Returns -1 if an unexpected failure arises; returns 1 if item successfully appended. 
+void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list.
 
-	if(head == NULL){
-		printf("Error! List_append() receives a node** with value NULL.\n");
-		return -1;
-	}//end if
+	assert(head != NULL);
 
 	struct node *tmp = NULL;
 	if(*head != NULL){ // if the list is not empty
@@ -114,8 +108,26 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 	if((*head)->next != NULL){ //Change the link of the thread contained in the next node to point to the current thread
 		(*head)->next->threadContext->uc_link = ctx;
 	}
+}
 
-	return 1;
+void list_append_node(struct node *n, struct node **head){ //add a node to the beginning of the list. 
+	assert(head != NULL);
+	
+	struct node *tmp = NULL;
+	if(*head != NULL){ // if the list is not empty
+		tmp = *head;	
+	}//end if
+
+	*head = n;
+	n->next = tmp;
+
+}
+
+void destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
+	free((*handle)->threadContext->uc_stack.ss_sp);
+	free((*handle)->threadContext);
+	free(*handle);
+	*handle = NULL;
 }
 
 /* ***************************** 
@@ -124,15 +136,18 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 
 static struct node **ready;
 static struct node **waiting;
-static struct node **running;
+static struct node *running;
 static ucontext_t mainthread;
 static int threadNumber = 0;
 
 void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
-	running = list_init();
-	swapcontext(&mainthread, &mainthread);
+	swapcontext(&mainthread, &mainthread);//stores the context of the calling thread - namely the mainthread - into mainthread
+	
+	//use the ready_queue as a buffer to pass the context of mainthread to running
+	
+
 	return;
 }
 
@@ -151,6 +166,11 @@ void ta_create(void (*func)(void *), void *arg) {
 }
 
 void ta_yield(void) {
+	struct node *yielded = running;
+	list_append_node(yielded, ready);
+	running = list_pop(ready);	
+	swapcontext(yielded->threadContext, running->threadContext);
+
     return;
 }
 

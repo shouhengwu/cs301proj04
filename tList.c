@@ -1,5 +1,8 @@
 #include "tList.h"
 
+//format:
+//an empty list: (*head) == NULL
+//a non-empty list: the last node has node->next = NULL;
 
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
@@ -27,7 +30,7 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-struct node *pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
+struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
 	assert(head != NULL);
 
 	if(*head ==NULL){ // if the list is empty
@@ -49,12 +52,9 @@ struct node *pop(struct node**head){//removes the last item from the list withou
 
 }
 
-int list_delete(struct node **head) { //delete the last item of a list. Returns -1 if an unexpected failure arises; returns 0 if the list is empty; returns 1 is deletion is successfully carried out
+int list_delete(struct node **head) { //delete the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
 
-	if(head == NULL){
-		printf("Error! List_delete() receives a NULL node**.\n");
-		return -1;
-	}//end if
+	assert(head != NULL);
 
 	if(*head == NULL){ //if the list is empty, return 0
 		return 0;
@@ -80,12 +80,9 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 	return 1;
 }
 
-int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list. Returns -1 if an unexpected failure arises; returns 1 if item successfully appended. 
+void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list.
 
-	if(head == NULL){
-		printf("Error! List_append() receives a node** with value NULL.\n");
-		return -1;
-	}//end if
+	assert(head != NULL);
 
 	struct node *tmp = NULL;
 	if(*head != NULL){ // if the list is not empty
@@ -99,8 +96,26 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 	if((*head)->next != NULL){ //Change the link of the thread contained in the next node to point to the current thread
 		(*head)->next->threadContext->uc_link = ctx;
 	}
+}
 
-	return 1;
+void list_append_node(struct node *n, struct node **head){ //add a node to the beginning of the list. 
+	assert(head != NULL);
+	
+	struct node *tmp = NULL;
+	if(*head != NULL){ // if the list is not empty
+		tmp = *head;	
+	}//end if
+
+	*head = n;
+	n->next = tmp;
+
+}
+
+void destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
+	free((*handle)->threadContext->uc_stack.ss_sp);
+	free((*handle)->threadContext);
+	free(*handle);
+	*handle = NULL;
 }
 
 
@@ -117,8 +132,12 @@ int main(){
 	list_append(ctx2, 2, head);
 	list_append(ctx3, 3, head);
 	list_print(*head);
-	list_clear(head);
+	
+	struct node *n = list_pop(head);
+	list_print(n);
+	list_append_node(n, head);
 	list_print(*head);
+	list_clear(head);
 
 	free(head);
 

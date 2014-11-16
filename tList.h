@@ -24,7 +24,9 @@ void list_print(const struct node *);
 
 int list_delete(struct node **);
 
-int list_append(ucontext_t *, int, struct node **);
+void list_append(ucontext_t *, int, struct node **);
+
+void list_append_node(struct node *, struct node **);
 
 int make_node(void (*func)(void *), void *arg);
 
