@@ -15,6 +15,7 @@
      list functions
    ***************************** */
 
+
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
 	*head = NULL;
@@ -27,6 +28,7 @@ void list_clear(struct node **head) {
         struct node *tmp = curr;
         curr = curr->next;
 		free((tmp->threadContext->uc_stack).ss_sp);
+		free(tmp->threadContext);
 		free(tmp);
     }
 	*head = NULL;
@@ -40,7 +42,7 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-struct node *pop(struct node**head){//returns the last item of the list
+struct node *pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
 	assert(head != NULL);
 
 	if(*head ==NULL){ // if the list is empty
@@ -48,11 +50,17 @@ struct node *pop(struct node**head){//returns the last item of the list
 	}
 
 	struct node *curr = *head;
-	while(curr->next != NULL){
+	if(curr->next == NULL){
+		*head = NULL;
+		return curr;
+	}//end if
+
+	while(curr->next->next != NULL){
 		curr = curr->next;
 	}//end while
-
-	return curr;
+	struct node *tmp = curr->next;	
+	curr->next = NULL;
+	return tmp;
 
 }
 
@@ -70,6 +78,7 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 	struct node *curr = *head;
 	if(curr->next == NULL){ //if the list contains only 1 item, delete it and then return 1	
 		free((curr->threadContext->uc_stack).ss_sp);
+		free(curr->threadContext);
 		free(curr);
 		*head = NULL;
 		return 1;
@@ -80,6 +89,7 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 		curr = curr->next;
 	}//end while
 	free((curr->threadContext->uc_stack).ss_sp);
+	free(curr->threadContext);
 	free(curr->next);
 	curr->next = NULL;
 	return 1;
@@ -88,7 +98,7 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list. Returns -1 if an unexpected failure arises; returns 1 if item successfully appended. 
 
 	if(head == NULL){
-		printf("Error! List_append() receives a NULL node**.\n");
+		printf("Error! List_append() receives a node** with value NULL.\n");
 		return -1;
 	}//end if
 
@@ -100,6 +110,11 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 	(*head)->threadContext = ctx;
 	(*head)->threadNum = threadNum;
 	(*head)->next = tmp;
+
+	if((*head)->next != NULL){ //Change the link of the thread contained in the next node to point to the current thread
+		(*head)->next->threadContext->uc_link = ctx;
+	}
+
 	return 1;
 }
 
@@ -109,11 +124,14 @@ int list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an i
 
 static struct node **ready;
 static struct node **waiting;
+static struct node **running;
 static ucontext_t mainthread;
+static int threadNumber = 0;
 
 void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
+	running = list_init();
 	swapcontext(&mainthread, &mainthread);
 	return;
 }
@@ -127,6 +145,7 @@ void ta_create(void (*func)(void *), void *arg) {
     ctx[1].uc_stack.ss_size = STACKSIZE;
 	ctx->uc_link = &mainthread; 
 	makecontext(ctx, func, 1, arg);
+	list_append(ctx, threadNumber++, ready);
 
 	return;
 }
