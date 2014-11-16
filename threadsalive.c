@@ -45,7 +45,7 @@ void list_print(const struct node *list) {
 struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
 	assert(head != NULL);
 
-	if(*head ==NULL){ // if the list is empty
+	if(*head == NULL){ // if the list is empty
 		return NULL;
 	}
 
@@ -123,12 +123,13 @@ void list_append_node(struct node *n, struct node **head){ //add a node to the b
 
 }
 
-void destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
+void list_destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
 	free((*handle)->threadContext->uc_stack.ss_sp);
 	free((*handle)->threadContext);
 	free(*handle);
 	*handle = NULL;
 }
+
 
 /* ***************************** 
      stage 1 library functions
@@ -146,7 +147,8 @@ void ta_libinit() {
 	swapcontext(&mainthread, &mainthread);//stores the context of the calling thread - namely the mainthread - into mainthread
 	
 	//use the ready_queue as a buffer to pass the context of mainthread to running
-	
+	list_append(&mainthread, threadNumber++, ready);
+	running = list_pop(ready);
 
 	return;
 }
@@ -165,18 +167,25 @@ void ta_create(void (*func)(void *), void *arg) {
 	return;
 }
 
-void ta_yield(void) {
+void ta_yield() {
+	
+	assert(running != NULL);
+
 	struct node *yielded = running;
 	list_append_node(yielded, ready);
-	running = list_pop(ready);	
+	running = list_pop(ready);
 	swapcontext(yielded->threadContext, running->threadContext);
 
     return;
 }
 
-int ta_waitall(void) {
+int ta_waitall() {
+	running = list_pop(ready);
+	
+	
     return -1;
 }
+
 
 
 /* ***************************** 
@@ -223,4 +232,5 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 
 void ta_signal(tacond_t *cond) {
 }
+
 

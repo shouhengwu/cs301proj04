@@ -33,7 +33,7 @@ void list_print(const struct node *list) {
 struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
 	assert(head != NULL);
 
-	if(*head ==NULL){ // if the list is empty
+	if(*head == NULL){ // if the list is empty
 		return NULL;
 	}
 
@@ -111,14 +111,14 @@ void list_append_node(struct node *n, struct node **head){ //add a node to the b
 
 }
 
-void destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
+void list_destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
 	free((*handle)->threadContext->uc_stack.ss_sp);
 	free((*handle)->threadContext);
 	free(*handle);
 	*handle = NULL;
 }
 
-
+/*
 int main(){
 	ucontext_t *ctx1 = malloc(sizeof(ucontext_t));
 	ucontext_t *ctx2 = malloc(sizeof(ucontext_t));
@@ -143,4 +143,5 @@ int main(){
 
 	return 0;
 }//end main
+*/
 
