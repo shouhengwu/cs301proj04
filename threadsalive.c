@@ -236,11 +236,18 @@ void ta_create(void (*func)(void *), void *arg) {
 
 void ta_yield() {
 
+	printf("Thread %d yielding.\n", list_last(ready)->threadNum);//TEST
+
 	struct node *yielded = list_pop(ready);
 
 	if(yielded == NULL){
 		return;
-	}	
+	}
+
+	if(list_empty(ready)){//if there is no thread waiting to run, the calling thread Of ta_yield() continues running 
+		list_append_node(yielded, ready);
+		return;
+	}
 
 	yielded->threadContext->uc_link = &mainthread;
 	list_append_node(yielded, ready);
@@ -344,6 +351,9 @@ void ta_lock_destroy(talock_t *mutex) {
 }
 
 void ta_lock(talock_t *mutex) {
+
+	printf("Thread %d locking.\n", list_last(ready)->threadNum);
+
 	ta_sem_wait(&mutex->binary_sem);
 }
 
@@ -378,6 +388,7 @@ void ta_cond_destroy(tacond_t *cond) {
 void ta_wait(talock_t *mutex, tacond_t *cond) {
 
 	struct node *current_thread = list_pop(ready);
+	assert(current_thread != NULL);
 	list_append_node(current_thread, cond->queue);
 	ta_unlock(mutex);
 	if(!list_empty(ready)){
@@ -392,6 +403,7 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 void ta_signal(tacond_t *cond) {
 	if(!list_empty(cond->queue)){
 		struct node *waken = list_pop(cond->queue);
+		assert(waken != NULL);
 		list_append_node(waken, ready);
 	}
 

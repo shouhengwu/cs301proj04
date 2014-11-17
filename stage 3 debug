@@ -1,0 +1,3 @@
+ready: 2
+mutex_queue: 
+cond_queue: 1
