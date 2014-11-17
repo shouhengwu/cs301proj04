@@ -99,8 +99,6 @@ int main(int argc, char **argv)
         ta_create(writer, (void *)i);
     }
 
-	printf("I'm here!\n");
-
     int rv = ta_waitall();
     assert(rv == 0);
 

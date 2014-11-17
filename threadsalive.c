@@ -239,7 +239,7 @@ void ta_yield() {
 }
 
 int ta_waitall() {
-	struct node *mainthread_node = list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
+	struct node *mainthread_node = list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and we wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
 	if(list_empty(ready) && list_empty(waiting)){
 		return 0;
 	}
@@ -256,7 +256,7 @@ int ta_waitall() {
 	}
 
 	list_clear(ready);
-	list_destroy_node(&mainthread_node);
+	//list_destroy_node(&mainthread_node);
 	free(ready);
 
 	if(list_empty(waiting)){
