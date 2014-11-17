@@ -28,10 +28,10 @@ void list_append(ucontext_t *, int, struct node **);
 
 void list_append_node(struct node *, struct node **);
 
-void list_destroy_node(struct node **handle);
+int list_destroy_node(struct node **);
 
 int make_node(void (*func)(void *), void *arg);
 
-//int main();
+int main();
 
 #endif

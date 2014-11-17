@@ -30,7 +30,7 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
+struct node *list_pop(struct node**head){//if the list is empty, returns NULL; otherwise removes the last item from the list without destroying that item, and then returns a pointer to that item.
 	assert(head != NULL);
 
 	if(*head == NULL){ // if the list is empty
@@ -52,7 +52,23 @@ struct node *list_pop(struct node**head){//removes the last item from the list w
 
 }
 
-int list_delete(struct node **head) { //delete the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
+struct node *list_last(struct node **head){ // if the list is empty, returns NULL; otherwise returns a pointer to the last item on the list
+	assert(head != NULL);
+	
+	if(*head == NULL){ // if the list is empty
+		return NULL;
+	}
+
+	struct node *curr = *head;
+	while(curr->next != NULL){
+		curr = curr->next;
+	}//end if
+	
+	return curr;
+
+}
+
+int list_delete(struct node **head) { //destroy the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
 
 	assert(head != NULL);
 
@@ -78,6 +94,21 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 	free(curr->next);
 	curr->next = NULL;
 	return 1;
+}
+
+int list_destroy_node(struct node **nd){ //returns 0 if the list is empty; returns 1 if deletection is successfully carried out
+	assert(nd != NULL);
+	if(*nd == NULL){
+		return 0;
+	}	
+
+	struct node *n = *nd;
+	free((n->threadContext->uc_stack).ss_sp);
+	free(n->threadContext);
+	free(n);
+	*nd = NULL;
+	return 1;
+
 }
 
 void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list.
@@ -108,17 +139,22 @@ void list_append_node(struct node *n, struct node **head){ //add a node to the b
 
 	*head = n;
 	n->next = tmp;
+	if(n->next != NULL){
+		n->next->threadContext->uc_link = n->threadContext;
+	}
 
 }
 
-void list_destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
-	free((*handle)->threadContext->uc_stack.ss_sp);
-	free((*handle)->threadContext);
-	free(*handle);
-	*handle = NULL;
+bool list_empty(struct node **head){
+	assert(head != NULL);
+	if(*head == NULL){
+		return true;
+	}//end if
+	else{
+		return false;
+	}//end else
 }
 
-/*
 int main(){
 	ucontext_t *ctx1 = malloc(sizeof(ucontext_t));
 	ucontext_t *ctx2 = malloc(sizeof(ucontext_t));
@@ -131,17 +167,15 @@ int main(){
 	list_append(ctx1, 1, head);
 	list_append(ctx2, 2, head);
 	list_append(ctx3, 3, head);
-	list_print(*head);
 	
 	struct node *n = list_pop(head);
 	list_print(n);
-	list_append_node(n, head);
-	list_print(*head);
 	list_clear(head);
-
+	if(list_empty(head)){
+		printf("List is emptied!\n");	
+	}
 	free(head);
 
 	return 0;
 }//end main
-*/
 

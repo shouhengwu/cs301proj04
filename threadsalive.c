@@ -12,9 +12,18 @@
 #include "threadsalive.h"
 
 /* ***************************** 
-     list functions
+     global variables
    ***************************** */
 
+static struct node **ready; //this linked list stores all threads that are in ready state. The righter-most/last item on this list holds the currently running thread. 
+static struct node **waiting;
+static ucontext_t mainthread;
+static int threadNumber = 0;
+
+
+/* ***************************** 
+     list functions
+   ***************************** */
 
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
@@ -42,7 +51,7 @@ void list_print(const struct node *list) {
     }
 }//end list_print
 
-struct node *list_pop(struct node**head){//removes the last item from the list without destroying that item, and then returns a pointer to that item
+struct node *list_pop(struct node**head){//if the list is empty, returns NULL; otherwise removes the last item from the list without destroying that item, and then returns a pointer to that item.
 	assert(head != NULL);
 
 	if(*head == NULL){ // if the list is empty
@@ -64,7 +73,23 @@ struct node *list_pop(struct node**head){//removes the last item from the list w
 
 }
 
-int list_delete(struct node **head) { //delete the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
+struct node *list_last(struct node **head){ // if the list is empty, returns NULL; otherwise returns a pointer to the last item on the list
+	assert(head != NULL);
+	
+	if(*head == NULL){ // if the list is empty
+		return NULL;
+	}
+
+	struct node *curr = *head;
+	while(curr->next != NULL){
+		curr = curr->next;
+	}//end if
+	
+	return curr;
+
+}
+
+int list_delete(struct node **head) { //destroy the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
 
 	assert(head != NULL);
 
@@ -90,6 +115,21 @@ int list_delete(struct node **head) { //delete the last item of a list. Returns 
 	free(curr->next);
 	curr->next = NULL;
 	return 1;
+}
+
+int list_destroy_node(struct node **nd){ //returns 0 if the list is empty; returns 1 if deletection is successfully carried out
+	assert(nd != NULL);
+	if(*nd == NULL){
+		return 0;
+	}	
+
+	struct node *n = *nd;
+	free((n->threadContext->uc_stack).ss_sp);
+	free(n->threadContext);
+	free(n);
+	*nd = NULL;
+	return 1;
+
 }
 
 void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an item to the beginning of the list.
@@ -120,14 +160,19 @@ void list_append_node(struct node *n, struct node **head){ //add a node to the b
 
 	*head = n;
 	n->next = tmp;
-
+	if(n->next != NULL){
+		n->next->threadContext->uc_link = n->threadContext;
+	}
 }
 
-void list_destroy_node(struct node **handle){ //used to destroy individual nodes. Do not use on nodes that are part of a list. 
-	free((*handle)->threadContext->uc_stack.ss_sp);
-	free((*handle)->threadContext);
-	free(*handle);
-	*handle = NULL;
+bool list_empty(struct node **head){
+	assert(head != NULL);
+	if(*head == NULL){
+		return true;
+	}//end if
+	else{
+		return false;
+	}//end else
 }
 
 
@@ -135,20 +180,13 @@ void list_destroy_node(struct node **handle){ //used to destroy individual nodes
      stage 1 library functions
    ***************************** */
 
-static struct node **ready;
-static struct node **waiting;
-static struct node *running;
-static ucontext_t mainthread;
-static int threadNumber = 0;
-
 void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
-	swapcontext(&mainthread, &mainthread);//stores the context of the calling thread - namely the mainthread - into mainthread
+	swapcontext(&mainthread, &mainthread);//stores the context of the calling thread - namely the main thread - into mainthread
 	
-	//use the ready_queue as a buffer to pass the context of mainthread to running
+	//add the main thread to ready queue. Since the thread stored in the last item of the ready queue is the currently running thread, this append operation is done to reflect the fact that the main thread is the currently running thread and has thread number 0.
 	list_append(&mainthread, threadNumber++, ready);
-	running = list_pop(ready);
 
 	return;
 }
@@ -159,31 +197,108 @@ void ta_create(void (*func)(void *), void *arg) {
 	ucontext_t *ctx = malloc(sizeof(ucontext_t));
 	getcontext(ctx);
 	ctx->uc_stack.ss_sp = stack_space;
-    ctx[1].uc_stack.ss_size = STACKSIZE;
+    ctx->uc_stack.ss_size = STACKSIZE;
 	ctx->uc_link = &mainthread; 
-	makecontext(ctx, func, 1, arg);
+	makecontext(ctx, (void (*)(void*))func, 1, arg);
 	list_append(ctx, threadNumber++, ready);
 
 	return;
 }
 
 void ta_yield() {
-	
-	assert(running != NULL);
 
-	struct node *yielded = running;
+	struct node *yielded = list_pop(ready);
+	yielded->threadContext->uc_link = &mainthread;
 	list_append_node(yielded, ready);
-	running = list_pop(ready);
-	swapcontext(yielded->threadContext, running->threadContext);
+	
+	/*TEST
+	printf("\nThread %d yielded.\n", yielded->threadNum);	
+	printf("%p\t%p\n", (*ready)->next->next->next->threadContext->uc_link, (*ready)->next->next->threadContext);
+	printf("%p\t%p\n", (*ready)->next->next->threadContext->uc_link, (*ready)->next->threadContext);
+	printf("%p\t%p\n", (*ready)->next->threadContext->uc_link, (*ready)->threadContext);
+	printf("%p\t%p\n", (*ready)->threadContext->uc_link, &mainthread);
+	TEST*/
+
+
+	swapcontext(yielded->threadContext, list_last(ready)->threadContext);
 
     return;
 }
 
 int ta_waitall() {
-	running = list_pop(ready);
+	list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
+	if(list_empty(ready) && list_empty(waiting)){
+		return 0;
+	}
 	
+	if(list_empty(ready) && !list_empty(waiting)){
+		return -1;
+	}
+
+	while(!list_empty(ready)){
+		swapcontext(&mainthread, list_last(ready)->threadContext);
+		list_delete(ready); //CONTINUE
+		//printf("Back in ta_waitall()!\n");//TEST
+	}
+
+	if(list_empty(waiting)){
+		return 0;
+	}//end if
+	else{
+		return -1;
+	}//end else
 	
-    return -1;
+}
+
+/* ***************************** 
+     Testing
+   ***************************** */
+void thread1(void *arg)
+{
+    int *i = (int *)arg;
+    *i += 7;
+    fprintf(stderr, "begin t1: %d\n", *i);
+    ta_yield();
+    *i += 7;
+    fprintf(stderr, "end t1: %d\n", *i);
+}
+
+void thread2(void *arg)
+{
+    int *i = (int *)arg;
+    *i -= 7;
+    fprintf(stderr, "begin t2: %d\n", *i);
+    ta_yield();
+    *i -= 7;
+    fprintf(stderr, "end t2: %d\n", *i);
+}
+
+int main(int argc, char **argv)
+{
+    printf("Tester for stage 1.  Uses all four stage 1 library functions.\n");
+
+    ta_libinit();
+    int i = 0;
+    for (i = 0; i < 2; i++) {
+        ta_create(thread1, (void *)&i);
+        ta_create(thread2, (void *)&i);
+    }
+
+	/*TEST
+	printf("\n%p\t%p\n", (*ready)->next->next->next->threadContext->uc_link, (*ready)->next->next->threadContext);
+	printf("%p\t%p\n", (*ready)->next->next->threadContext->uc_link, (*ready)->next->threadContext);
+	printf("%p\t%p\n", (*ready)->next->threadContext->uc_link, (*ready)->threadContext);
+	printf("%p\t%p\n", (*ready)->threadContext->uc_link, &mainthread);
+	TEST*/
+
+	
+
+    int rv = ta_waitall();
+
+    if (rv) {
+        fprintf(stderr, "%d threads were not ready to run when ta_waitall() was called\n", -rv);
+    }
+    return 0;
 }
 
 
