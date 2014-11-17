@@ -58,6 +58,7 @@ struct node *list_pop(struct node**head){//if the list is empty, returns NULL; o
 		return NULL;
 	}
 
+	
 	struct node *curr = *head;
 	if(curr->next == NULL){
 		*head = NULL;
@@ -110,8 +111,8 @@ int list_delete(struct node **head) { //destroy the last item of a list. Returns
 	while(curr->next->next != NULL){
 		curr = curr->next;
 	}//end while
-	free((curr->threadContext->uc_stack).ss_sp);
-	free(curr->threadContext);
+	free((curr->next->threadContext->uc_stack).ss_sp);
+	free(curr->next->threadContext);
 	free(curr->next);
 	curr->next = NULL;
 	return 1;
@@ -183,7 +184,7 @@ bool list_empty(struct node **head){
 void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
-	swapcontext(&mainthread, &mainthread);//stores the context of the calling thread - namely the main thread - into mainthread
+	getcontext(&mainthread);//stores the context of the current thread - namely the main thread - into mainthread
 	
 	//add the main thread to ready queue. Since the thread stored in the last item of the ready queue is the currently running thread, this append operation is done to reflect the fact that the main thread is the currently running thread and has thread number 0.
 	list_append(&mainthread, threadNumber++, ready);
@@ -226,7 +227,7 @@ void ta_yield() {
 }
 
 int ta_waitall() {
-	list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
+	struct node *mainthread_node = list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
 	if(list_empty(ready) && list_empty(waiting)){
 		return 0;
 	}
@@ -235,11 +236,16 @@ int ta_waitall() {
 		return -1;
 	}
 
+	//patchwork needed
+	//after the thread that is swapped to finishes execution, a context-switching should take place to the next thread in the linked list, not back to swapcontext.
 	while(!list_empty(ready)){
 		swapcontext(&mainthread, list_last(ready)->threadContext);
-		list_delete(ready); //CONTINUE
-		//printf("Back in ta_waitall()!\n");//TEST
+		list_delete(ready); 
 	}
+
+	list_clear(ready);
+	list_destroy_node(mainthread_node);
+	free(ready);
 
 	if(list_empty(waiting)){
 		return 0;
