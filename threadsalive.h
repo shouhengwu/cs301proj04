@@ -13,27 +13,6 @@
 #include <assert.h>
 
 /* ***************************
-        type definitions
-   *************************** */
-
-typedef struct {
-	struct node **queue;
-	int value;
-
-} tasem_t;
-
-typedef struct {
-	tasem_t binary_sem;
-
-} talock_t;
-
-typedef struct {
-
-	struct node **queue;
-
-} tacond_t;
-
-/* ***************************
        list functions
    *************************** */
 
@@ -76,6 +55,27 @@ void ta_libinit(void);
 void ta_create(void (*)(void *), void *);
 void ta_yield(void);
 int ta_waitall(void);
+
+/* ***************************
+        type definitions
+   *************************** */
+
+typedef struct {
+	struct node **queue;
+	int value;
+
+} tasem_t;
+
+typedef struct {
+	tasem_t binary_sem;
+
+} talock_t;
+
+typedef struct {
+
+	struct node **queue;
+
+} tacond_t;
 
 /* ***************************
        stage 2 functions

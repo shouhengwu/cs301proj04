@@ -213,9 +213,6 @@ void ta_libinit() {
 	ready = list_init();
 	waiting = list_init();
 	getcontext(&mainthread);//stores the context of the current thread - namely the main thread - into mainthread
-	
-	//add the main thread to ready queue. Since the thread stored in the last item of the ready queue is the currently running thread, this append operation is done to reflect the fact that the main thread is the currently running thread and has thread number 0.
-	list_append(&mainthread, threadNumber++, ready);
 
 	return;
 }
@@ -251,7 +248,6 @@ void ta_yield() {
 }
 
 int ta_waitall() {
-	struct node *mainthread_node = list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and we wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
 	if(list_empty(ready) && list_empty(waiting)){
 		return 0;
 	}
@@ -266,7 +262,6 @@ int ta_waitall() {
 	}
 
 	list_clear(ready);
-	list_destroy_mainthread_node(&mainthread_node);
 	free(ready);
 
 	if(list_empty(waiting)){
@@ -318,7 +313,7 @@ void ta_sem_wait(tasem_t *sem) {
 
 	(sem->value)--;
 	if(sem->value >= 0){
-		// if the semaphore's value is greater or equal to 0 after decrementing, do nothing, allows the thread to keep running
+		// if the semaphore's value is greater or equal to 0 after decrementing, do nothing, thus allowing the thread to keep running
 	}//end if
 	else{ //else, put the thread to sleep
 		struct node *sleep = list_pop(ready);
@@ -377,6 +372,8 @@ void ta_cond_destroy(tacond_t *cond) {
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
 
+	printf("we're in ta_wait()!\n");
+
 	struct node *current_thread = list_pop(ready);
 	list_append_node(current_thread, cond->queue);
 	ta_unlock(mutex);
@@ -390,6 +387,9 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 }
 
 void ta_signal(tacond_t *cond) {
+
+	printf("we're in ta_signal()!\n");
+
 	if(!list_empty(cond->queue)){
 		struct node *waken = list_pop(cond->queue);
 		list_append_node(waken, ready);
