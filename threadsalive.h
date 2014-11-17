@@ -10,10 +10,13 @@
    *************************** */
 
 typedef struct {
+	struct node **queue;
+	int value;
 
 } tasem_t;
 
 typedef struct {
+	tasem_t binary_sem;
 
 } talock_t;
 

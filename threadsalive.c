@@ -151,7 +151,7 @@ void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an 
 	}
 }
 
-void list_append_node(struct node *n, struct node **head){ //add a node to the beginning of the list. 
+void list_append_node(struct node *n, struct node **head){ //add a node to the beginning of the list, and changes the uc_link of the next node to point to the node that's just been added.
 	assert(head != NULL);
 	
 	struct node *tmp = NULL;
@@ -164,6 +164,18 @@ void list_append_node(struct node *n, struct node **head){ //add a node to the b
 	if(n->next != NULL){
 		n->next->threadContext->uc_link = n->threadContext;
 	}
+}
+
+void list_sema_append_node(struct node *n, struct node **head){ // add a node to the beginning of the list without changing the uc_link of the next node in line.
+	assert(head != NULL);
+	
+	struct node *tmp = NULL;
+	if(*head != NULL){ // if the list is not empty
+		tmp = *head;	
+	}//end if
+
+	*head = n;
+	n->next = tmp;
 }
 
 bool list_empty(struct node **head){
@@ -236,15 +248,15 @@ int ta_waitall() {
 		return -1;
 	}
 
-	//patchwork needed
-	//after the thread that is swapped to finishes execution, a context-switching should take place to the next thread in the linked list, not back to swapcontext.
+	//patchworks needed
+	//debug: after the thread that is swapped to finishes execution, a context-switching should take place to the next thread in the linked list, not back to swapcontext.
 	while(!list_empty(ready)){
 		swapcontext(&mainthread, list_last(ready)->threadContext);
 		list_delete(ready); 
 	}
 
 	list_clear(ready);
-	list_destroy_node(mainthread_node);
+	list_destroy_node(&mainthread_node);
 	free(ready);
 
 	if(list_empty(waiting)){
@@ -258,7 +270,7 @@ int ta_waitall() {
 
 /* ***************************** 
      Testing
-   ***************************** */
+   ***************************** 
 void thread1(void *arg)
 {
     int *i = (int *)arg;
@@ -290,13 +302,6 @@ int main(int argc, char **argv)
         ta_create(thread2, (void *)&i);
     }
 
-	/*TEST
-	printf("\n%p\t%p\n", (*ready)->next->next->next->threadContext->uc_link, (*ready)->next->next->threadContext);
-	printf("%p\t%p\n", (*ready)->next->next->threadContext->uc_link, (*ready)->next->threadContext);
-	printf("%p\t%p\n", (*ready)->next->threadContext->uc_link, (*ready)->threadContext);
-	printf("%p\t%p\n", (*ready)->threadContext->uc_link, &mainthread);
-	TEST*/
-
 	
 
     int rv = ta_waitall();
@@ -307,34 +312,73 @@ int main(int argc, char **argv)
     return 0;
 }
 
-
+*/
 
 /* ***************************** 
      stage 2 library functions
    ***************************** */
 
 void ta_sem_init(tasem_t *sem, int value) {
+
+	assert(sem != NULL);
+
+	sem->queue = malloc(sizeof(struct node *));
+	*(sem->queue) = NULL;
+	sem->value = value;
+
 }
 
 void ta_sem_destroy(tasem_t *sem) {
+
+	list_clear(sem->queue);	
+	free(sem->queue);
+
 }
 
 void ta_sem_post(tasem_t *sem) {
+
+	(sem->value)++; //increment the semaphore value by 1
+	if(!list_empty(sem->queue)){//CONTINUE
+		struct node *waken = list_pop(sem->queue);
+		list_append_node(waken, ready);
+	}//end if
+	
 }
 
 void ta_sem_wait(tasem_t *sem) {
+
+	(sem->value)--;
+	if(sem->value >= 0){
+		// if the semaphore's value is greater or equal to 0 after decrementing, do nothing, allows the thread to keep running
+	}//end if
+	else{ //else, put the thread to sleep
+		struct node *sleep = list_pop(ready);
+		list_append_node(sleep, sem->queue);
+		ucontext_t current_context;
+		swapcontext(&current_context, list_last(ready)->threadContext);
+	}//end else
+
 }
 
 void ta_lock_init(talock_t *mutex) {
+	ta_sem_init(&(mutex->binary_sem), 1);
 }
 
 void ta_lock_destroy(talock_t *mutex) {
+	ta_sem_destroy(&(mutex->binary_sem));
 }
 
 void ta_lock(talock_t *mutex) {
+	ta_sem_wait(&mutex->binary_sem);
 }
 
 void ta_unlock(talock_t *mutex) {
+	if(mutex->binary_sem.value == 1){ //if the lock is already unlocked, do nothing
+
+	}
+	else{
+		ta_sem_post(&mutex->binary_sem);
+	}
 }
 
 
