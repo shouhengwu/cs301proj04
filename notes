@@ -1,3 +1,3 @@
 1. After updating uc_link, do I need to use makecontext to make the changes effective?
 2. Figure out why the list_destroy_node in ta_waitall() is not working - it causes a double-free
-
+3. ta_waitall(): what if the main thread calls ta_waitall() twice? Maybe mainthread should never be in the ready queue. Fix it. 

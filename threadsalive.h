@@ -5,6 +5,13 @@
 #ifndef __THREADSALIVE_H__
 #define __THREADSALIVE_H__
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <ucontext.h>
+#include <assert.h>
+
 /* ***************************
         type definitions
    *************************** */
@@ -22,7 +29,43 @@ typedef struct {
 
 typedef struct {
 
+	struct node **queue;
+
 } tacond_t;
+
+/* ***************************
+       list functions
+   *************************** */
+
+struct node {
+	int threadNum;
+    ucontext_t *threadContext;
+    struct node *next; 
+};
+
+struct node **list_init(); // returns a node**
+
+void list_clear(struct node **);
+
+void list_print(const struct node *);
+
+struct node *list_pop(struct node**);//if the list is empty, returns NULL; otherwise removes the last item from the list without destroying that item, and then returns a pointer to that item.
+
+struct node *list_last(struct node **); // if the list is empty, returns NULL; otherwise returns a pointer to the last item on the list
+
+int list_delete(struct node **);//destroy the last item of a list. Returns 0 if the list is empty; returns 1 if deletion has been successfully carried out
+
+int list_destroy_node(struct node **);//returns 0 if the node does not exist; returns 1 if deletection is successfully carried out
+
+int list_destroy_mainthread_node(struct node **); //returns 0 if the node does not exist; returns 1 if deletection is successfully carried out. This function is specifically used to destroy a node that contains the context of the main thread. This function differs from the normal list_destroy_node in that it does not free the node's thread context and its associated resources, since the memory for the thread context of main thread is not malloc'ed and need not be freed. 
+
+void list_append(ucontext_t *, int , struct node **);//add an item to the beginning of the list.
+
+void list_append_node(struct node *, struct node **); //add a node to the beginning of the list, and changes the uc_link of the next node to point to the node that's just been added.
+
+void list_sema_append_node(struct node *, struct node **); // add a node to the beginning of the list without changing the uc_link of the next node in line.
+
+bool list_empty(struct node **);//return true if the list is empty; otherwise return false.
 
 
 /* ***************************

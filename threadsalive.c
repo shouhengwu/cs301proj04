@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <strings.h>
 #include <string.h>
-#include "tList.h"
 #include "threadsalive.h"
 
 /* ***************************** 
@@ -118,7 +117,7 @@ int list_delete(struct node **head) { //destroy the last item of a list. Returns
 	return 1;
 }
 
-int list_destroy_node(struct node **nd){ //returns 0 if the list is empty; returns 1 if deletection is successfully carried out
+int list_destroy_node(struct node **nd){ //returns 0 if the node does not exist; returns 1 if deletection is successfully carried out
 	assert(nd != NULL);
 	if(*nd == NULL){
 		return 0;
@@ -129,6 +128,19 @@ int list_destroy_node(struct node **nd){ //returns 0 if the list is empty; retur
 	free(n->threadContext);
 	free(n);
 	*nd = NULL;
+	return 1;
+
+}
+
+int list_destroy_mainthread_node(struct node **md){ //returns 0 if the node does not exist; returns 1 if deletection is successfully carried out. This function differs from the normal list_destroy_node in that it does not need to free the node's thread context and its associated resources, since the memory for the thread context of main thread is not malloc'ed and need not be freed. 
+	assert(md != NULL);
+	if(*md == NULL){
+		return 0;
+	}	
+
+	struct node *n = *md;
+	free(n);
+	*md = NULL;
 	return 1;
 
 }
@@ -153,6 +165,10 @@ void list_append(ucontext_t *ctx, int threadNum, struct node **head) { //add an 
 
 void list_append_node(struct node *n, struct node **head){ //add a node to the beginning of the list, and changes the uc_link of the next node to point to the node that's just been added.
 	assert(head != NULL);
+
+	if(n == NULL){
+		return;
+	}
 	
 	struct node *tmp = NULL;
 	if(*head != NULL){ // if the list is not empty
@@ -221,18 +237,14 @@ void ta_create(void (*func)(void *), void *arg) {
 void ta_yield() {
 
 	struct node *yielded = list_pop(ready);
+
+	if(yielded == NULL){
+		return;
+	}	
+
 	yielded->threadContext->uc_link = &mainthread;
 	list_append_node(yielded, ready);
-	
-	/*TEST
-	printf("\nThread %d yielded.\n", yielded->threadNum);	
-	printf("%p\t%p\n", (*ready)->next->next->next->threadContext->uc_link, (*ready)->next->next->threadContext);
-	printf("%p\t%p\n", (*ready)->next->next->threadContext->uc_link, (*ready)->next->threadContext);
-	printf("%p\t%p\n", (*ready)->next->threadContext->uc_link, (*ready)->threadContext);
-	printf("%p\t%p\n", (*ready)->threadContext->uc_link, &mainthread);
-	TEST*/
-
-
+	assert(!list_empty(ready));
 	swapcontext(yielded->threadContext, list_last(ready)->threadContext);
 
     return;
@@ -248,71 +260,27 @@ int ta_waitall() {
 		return -1;
 	}
 
-	//patchworks needed
-	//debug: after the thread that is swapped to finishes execution, a context-switching should take place to the next thread in the linked list, not back to swapcontext.
 	while(!list_empty(ready)){
 		swapcontext(&mainthread, list_last(ready)->threadContext);
 		list_delete(ready); 
 	}
 
 	list_clear(ready);
-	//list_destroy_node(&mainthread_node);
+	list_destroy_mainthread_node(&mainthread_node);
 	free(ready);
 
 	if(list_empty(waiting)){
+		list_clear(waiting);
+		free(waiting);
 		return 0;
 	}//end if
 	else{
+		list_clear(waiting);
+		free(waiting);
 		return -1;
 	}//end else
 	
 }
-
-/* ***************************** 
-     Testing
-   ***************************** 
-void thread1(void *arg)
-{
-    int *i = (int *)arg;
-    *i += 7;
-    fprintf(stderr, "begin t1: %d\n", *i);
-    ta_yield();
-    *i += 7;
-    fprintf(stderr, "end t1: %d\n", *i);
-}
-
-void thread2(void *arg)
-{
-    int *i = (int *)arg;
-    *i -= 7;
-    fprintf(stderr, "begin t2: %d\n", *i);
-    ta_yield();
-    *i -= 7;
-    fprintf(stderr, "end t2: %d\n", *i);
-}
-
-int main(int argc, char **argv)
-{
-    printf("Tester for stage 1.  Uses all four stage 1 library functions.\n");
-
-    ta_libinit();
-    int i = 0;
-    for (i = 0; i < 2; i++) {
-        ta_create(thread1, (void *)&i);
-        ta_create(thread2, (void *)&i);
-    }
-
-	
-
-    int rv = ta_waitall();
-
-    if (rv) {
-        fprintf(stderr, "%d threads were not ready to run when ta_waitall() was called\n", -rv);
-    }
-    return 0;
-}
-
-*/
 
 /* ***************************** 
      stage 2 library functions
@@ -338,8 +306,9 @@ void ta_sem_destroy(tasem_t *sem) {
 void ta_sem_post(tasem_t *sem) {
 
 	(sem->value)++; //increment the semaphore value by 1
-	if(!list_empty(sem->queue)){//CONTINUE
+	if(!list_empty(sem->queue)){
 		struct node *waken = list_pop(sem->queue);
+		assert(waken != NULL);
 		list_append_node(waken, ready);
 	}//end if
 	
@@ -353,9 +322,15 @@ void ta_sem_wait(tasem_t *sem) {
 	}//end if
 	else{ //else, put the thread to sleep
 		struct node *sleep = list_pop(ready);
+		assert (sleep != NULL);
 		list_append_node(sleep, sem->queue);
 		ucontext_t current_context;
-		swapcontext(&current_context, list_last(ready)->threadContext);
+		if(!list_empty(ready)){ // if there is a thread waiting to be run, run that thread
+			swapcontext(&current_context, list_last(ready)->threadContext);
+		}//end inner if
+		else{ //there is no thread to be run, go back to main thread
+			swapcontext(&current_context, &mainthread);
+		}//end inner else
 	}//end else
 
 }
@@ -373,12 +348,13 @@ void ta_lock(talock_t *mutex) {
 }
 
 void ta_unlock(talock_t *mutex) {
-	if(mutex->binary_sem.value == 1){ //if the lock is already unlocked, do nothing
+	if(mutex->binary_sem.value == 1){ //if the lock is not locked, do nothing
 
 	}
 	else{
 		ta_sem_post(&mutex->binary_sem);
 	}
+
 }
 
 
@@ -387,15 +363,38 @@ void ta_unlock(talock_t *mutex) {
    ***************************** */
 
 void ta_cond_init(tacond_t *cond) {
+	assert(cond != NULL);
+	cond->queue = malloc(sizeof(struct node *));
+	*(cond->queue) = NULL;
+
 }
 
 void ta_cond_destroy(tacond_t *cond) {
+	list_clear(cond->queue);	
+	free(cond->queue);
+
 }
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
+
+	struct node *current_thread = list_pop(ready);
+	list_append_node(current_thread, cond->queue);
+	ta_unlock(mutex);
+	if(!list_empty(ready)){
+		swapcontext(current_thread->threadContext, list_last(ready)->threadContext);
+	}
+	else{
+		swapcontext(current_thread->threadContext, &mainthread);
+	}
+	ta_lock(mutex);
 }
 
 void ta_signal(tacond_t *cond) {
+	if(!list_empty(cond->queue)){
+		struct node *waken = list_pop(cond->queue);
+		list_append_node(waken, ready);
+	}
+
 }
 
 

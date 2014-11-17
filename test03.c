@@ -37,6 +37,8 @@ void thread1(void *v)
     fprintf(stderr, "thread1 exiting\n");
 }
 
+//21
+
 void thread2(void *v)
 {
     fprintf(stderr, "thread2 started up\n");
