@@ -20,9 +20,9 @@ static struct sem_node **sem_list; //this list keeps track of all the semaphores
 static int threadNumber = 0;
 
 
-/* ***************************** 
-     list functions
-   ***************************** */
+/* *****************************************************
+       list functions for linked lists of semaphores
+   *********************************************************** */
 
 struct sem_node **list_sem_list_init(){
 	struct sem_node **rv = malloc(sizeof(struct sem_node *));
@@ -30,7 +30,8 @@ struct sem_node **list_sem_list_init(){
 	return rv;
 }
 
-void list_sem_append(tasem_t *sem, struct sem_node **list){
+void list_append_sem_node(tasem_t *sem, struct sem_node **list){
+	
 	assert(list != NULL);
 
 	struct sem_node *original_head = *list;
@@ -67,38 +68,49 @@ void list_sem_destroy_list(struct sem_node **list){
 
 }//end method
 
+int list_delete_sem_node(tasem_t *sem, struct sem_node **list){//returns 0 if a deletion did not take place; returns 1 if a deletion took place
 
-/*
-int main(){
-	tasem_t sem1;
-	tasem_t sem2;
-	tasem_t sem3;
-	ta_sem_init(&sem1, 1);
-	ta_sem_init(&sem2, 1);
-	ta_sem_init(&sem3, 1);
-	ucontext_t ctx;	
-	getcontext(&ctx);
+	assert(sem != NULL);
+	assert(list != NULL);
+	assert(*list != NULL);
 
-	sem_list = list_sem_list_init();
-	list_sem_append(&sem1, sem_list);
-	list_sem_append(&sem2, sem_list);
-	list_sem_append(&sem3, sem_list);
-	list_append(&ctx, 0, sem1.queue);
-	list_pop(sem1.queue);
-	if(list_sem_all_empty(sem_list)){
-		printf("All sems are empty!\n");
-	}//end if
+	struct sem_node *curr = *list;	
+	//if the first node contains the semaphore that we want to delete
+	if(curr->sem == sem){
+		struct sem_node *tmp = curr->next;
+		free(curr);
+		*list = tmp;
+		return 1;
+	}
+
+	//if the second node contains the semaphore that we want to delete
+	if(curr->next->sem == sem){
+		curr->next = curr->next->next;
+		free(curr->next);
+		return 1;
+	}
+
+	while(curr->next->next != NULL){
+		if(curr->next->next->sem == sem){
+			struct sem_node *tmp = curr->next->next;
+			curr->next->next = curr->next->next->next;
+			free(tmp);
+			return 1;
+		}//end if
+		else{
+			curr = curr->next;
+		}//end else
+	}
+
 	
-
-
 	return 0;
-}
+
+}//end method
 
 
-*/
-
-
-
+/* ********************************************************
+       list functions for linked lists of thread contexts
+   ******************************************************* */
 
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
@@ -314,8 +326,6 @@ void ta_create(void (*func)(void *), void *arg) {
 
 void ta_yield() {
 
-	printf("Thread %d yielding.\n", list_last(ready)->threadNum);//TEST
-
 	struct node *yielded = list_pop(ready);
 
 	if(yielded == NULL){
@@ -375,6 +385,7 @@ void ta_sem_init(tasem_t *sem, int value) {
 	sem->queue = malloc(sizeof(struct node *));
 	*(sem->queue) = NULL;
 	sem->value = value;
+	list_append_sem_node(sem, sem_list);
 	
 
 }
@@ -383,6 +394,7 @@ void ta_sem_destroy(tasem_t *sem) {
 
 	list_clear(sem->queue);	
 	free(sem->queue);
+	list_delete_sem_node(sem, sem_list);
 
 }
 
@@ -428,8 +440,6 @@ void ta_lock_destroy(talock_t *mutex) {
 
 void ta_lock(talock_t *mutex) {
 
-	printf("Thread %d locking.\n", list_last(ready)->threadNum);
-
 	ta_sem_wait(&mutex->binary_sem);
 }
 
@@ -448,17 +458,12 @@ void ta_unlock(talock_t *mutex) {
      stage 3 library functions
    ***************************** */
 
-void ta_cond_init(tacond_t *cond) {
-	assert(cond != NULL);
-	cond->queue = malloc(sizeof(struct node *));
-	*(cond->queue) = NULL;
-
+void ta_cond_init(tacond_t *cond) {//does not need initialization
+	cond->partner_lock = malloc(sizeof(struct talock_t));
 }
 
 void ta_cond_destroy(tacond_t *cond) {
-	list_clear(cond->queue);	
-	free(cond->queue);
-
+	free(cond->partner_lock);
 }
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
@@ -474,6 +479,9 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 		swapcontext(current_thread->threadContext, &mainthread);
 	}
 	ta_lock(mutex);
+
+	//ma
+
 }
 
 void ta_signal(tacond_t *cond) {

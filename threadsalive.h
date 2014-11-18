@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct {
 
-	struct node **queue;
+	struct talock_t *partner_lock;
 
 } tacond_t;
 
@@ -55,6 +55,8 @@ void list_append_sem_node(tasem_t *, struct sem_node **);
 bool list_sem_node_all_clear(struct sem_node **);
 
 void list_sem_destroy_list(struct sem_node **);
+
+int list_delete_sem_node(tasem_t *sem, struct sem_node **sem_list);
 
 /* ********************************************************
        list functions for linked lists of thread contexts
