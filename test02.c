@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 
     ta_libinit();
     int i = 0;
-    int nrw = 5;
+    int nrw = 10;
 
     data = (int *)malloc(sizeof(int) * DATALEN);
     assert(data);

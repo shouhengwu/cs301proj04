@@ -365,9 +365,11 @@ int ta_waitall() {
 	free(ready);
 
 	if(list_sem_all_empty(sem_list)){
+		list_sem_destroy_list(sem_list);
 		return 0;
 	}//end if
 	else{
+		list_sem_destroy_list(sem_list);
 		return -1;
 	}//end else
 	
@@ -415,7 +417,7 @@ void ta_sem_wait(tasem_t *sem) {
 
 	(sem->value)--;
 	if(sem->value >= 0){
-		// if the semaphore's value is greater or equal to 0 after decrementing, do nothing, allows the thread to keep running
+		// if the semaphore's value is greater or equal to 0 after decrementing, do nothing and allow the thread to keep running
 	}//end if
 	else{ //else, put the thread to sleep
 		struct node *sleep = list_pop(ready);
@@ -483,9 +485,7 @@ void ta_wait(talock_t *mutex, tacond_t *cond) {
 	else{
 		swapcontext(current_thread->threadContext, &mainthread);
 	}
-
 	ta_lock(mutex);
-
 }
 
 void ta_signal(tacond_t *cond) {
