@@ -33,15 +33,32 @@ typedef struct {
 
 } tacond_t;
 
-/* ***************************
-       list functions
-   *************************** */
+struct sem_node {
+	tasem_t *sem;
+	struct sem_node *next;
+};
 
 struct node {
 	int threadNum;
     ucontext_t *threadContext;
     struct node *next; 
 };
+
+/* *****************************************************
+       list functions for linked lists of semaphores
+   *********************************************************** */
+
+struct sem_node **list_sem_list_init();
+
+void list_append_sem_node(tasem_t *, struct sem_node **);
+
+bool list_sem_node_all_clear(struct sem_node **);
+
+void list_sem_destroy_list(struct sem_node **);
+
+/* ********************************************************
+       list functions for linked lists of thread contexts
+   ******************************************************* */
 
 struct node **list_init(); // returns a node**
 

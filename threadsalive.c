@@ -14,15 +14,91 @@
      global variables
    ***************************** */
 
-static struct node **ready; //this linked list stores all threads that are in ready state. The righter-most/last item on this list holds the currently running thread. 
-static struct node **waiting;
+static struct node **ready; //this linked list stores all threads that are in ready state. The righter-most/last item on this list holds the currently running thread.
 static ucontext_t mainthread;
+static struct sem_node **sem_list; //this list keeps track of all the semaphores currently in use(including those used by locks)
 static int threadNumber = 0;
 
 
 /* ***************************** 
      list functions
    ***************************** */
+
+struct sem_node **list_sem_list_init(){
+	struct sem_node **rv = malloc(sizeof(struct sem_node *));
+	(*rv) = NULL;
+	return rv;
+}
+
+void list_sem_append(tasem_t *sem, struct sem_node **list){
+	assert(list != NULL);
+
+	struct sem_node *original_head = *list;
+
+	struct sem_node *tmp = malloc(sizeof(struct sem_node));
+	tmp->sem = sem;
+	tmp->next = original_head;
+	*list = tmp;
+}//end method
+
+bool list_sem_all_empty(struct sem_node **list){//this function returns true if all the semaphores in the list have empty queues; returns false otherwise
+	 
+	struct sem_node *curr = *list;
+	while(curr != NULL){
+		struct sem_node *tmp = curr;
+		curr = curr->next;
+		if(!list_empty(tmp->sem->queue)){
+			return false;
+		}//end if	
+	}
+
+	return true;
+
+}//end method
+
+void list_sem_destroy_list(struct sem_node **list){
+	
+	struct sem_node *curr = *list;
+	while(curr != NULL){
+		struct sem_node *tmp = curr;
+		curr = curr->next;
+		free(tmp);
+	}//end while
+
+}//end method
+
+
+/*
+int main(){
+	tasem_t sem1;
+	tasem_t sem2;
+	tasem_t sem3;
+	ta_sem_init(&sem1, 1);
+	ta_sem_init(&sem2, 1);
+	ta_sem_init(&sem3, 1);
+	ucontext_t ctx;	
+	getcontext(&ctx);
+
+	sem_list = list_sem_list_init();
+	list_sem_append(&sem1, sem_list);
+	list_sem_append(&sem2, sem_list);
+	list_sem_append(&sem3, sem_list);
+	list_append(&ctx, 0, sem1.queue);
+	list_pop(sem1.queue);
+	if(list_sem_all_empty(sem_list)){
+		printf("All sems are empty!\n");
+	}//end if
+	
+
+
+	return 0;
+}
+
+
+*/
+
+
+
 
 struct node **list_init(){
 	struct node **head = malloc(sizeof(struct node *));
@@ -35,10 +111,12 @@ void list_clear(struct node **head) {
 	while (curr != NULL) {
         struct node *tmp = curr;
         curr = curr->next;
-		free((tmp->threadContext->uc_stack).ss_sp);
-		free(tmp->threadContext);
+		if(tmp->threadContext != &mainthread){
+			free((tmp->threadContext->uc_stack).ss_sp);
+			free(tmp->threadContext);
+		}
 		free(tmp);
-    }
+	}	
 	*head = NULL;
 }
 
@@ -211,7 +289,7 @@ bool list_empty(struct node **head){
 
 void ta_libinit() {
 	ready = list_init();
-	waiting = list_init();
+	sem_list = list_sem_list_init();
 	getcontext(&mainthread);//stores the context of the current thread - namely the main thread - into mainthread
 	
 	//add the main thread to ready queue. Since the thread stored in the last item of the ready queue is the currently running thread, this append operation is done to reflect the fact that the main thread is the currently running thread and has thread number 0.
@@ -259,11 +337,11 @@ void ta_yield() {
 
 int ta_waitall() {
 	struct node *mainthread_node = list_pop(ready);//The last item of the ready queue holds the currently running thread. Since the main thread is running and we wish it to go to sleep, we need to "pop" it off the ready queue, and give the CPU to the next thread in queue.
-	if(list_empty(ready) && list_empty(waiting)){
+	if(list_empty(ready) && list_sem_all_empty(sem_list)){
 		return 0;
 	}
 	
-	if(list_empty(ready) && !list_empty(waiting)){
+	if(list_empty(ready) && !list_sem_all_empty(sem_list)){
 		return -1;
 	}
 
@@ -272,18 +350,15 @@ int ta_waitall() {
 		list_delete(ready); 
 	}
 
+	list_append_node(mainthread_node, ready);//main thread is back in ready queue and running
+
 	list_clear(ready);
-	list_destroy_mainthread_node(&mainthread_node);
 	free(ready);
 
-	if(list_empty(waiting)){
-		list_clear(waiting);
-		free(waiting);
+	if(list_sem_all_empty(sem_list)){
 		return 0;
 	}//end if
 	else{
-		list_clear(waiting);
-		free(waiting);
 		return -1;
 	}//end else
 	
@@ -300,6 +375,7 @@ void ta_sem_init(tasem_t *sem, int value) {
 	sem->queue = malloc(sizeof(struct node *));
 	*(sem->queue) = NULL;
 	sem->value = value;
+	
 
 }
 
