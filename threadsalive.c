@@ -102,7 +102,6 @@ int list_delete_sem_node(tasem_t *sem, struct sem_node **list){//returns 0 if a 
 		}//end else
 	}
 
-	
 	return 0;
 
 }//end method
@@ -395,6 +394,9 @@ void ta_sem_destroy(tasem_t *sem) {
 	list_clear(sem->queue);	
 	free(sem->queue);
 	list_delete_sem_node(sem, sem_list);
+	if(*sem_list == NULL){ //if all semaphores have been destroyed
+		free(sem_list);
+	}//end if
 
 }
 
@@ -459,38 +461,41 @@ void ta_unlock(talock_t *mutex) {
    ***************************** */
 
 void ta_cond_init(tacond_t *cond) {//does not need initialization
-	cond->partner_lock = malloc(sizeof(struct talock_t));
 }
 
-void ta_cond_destroy(tacond_t *cond) {
-	free(cond->partner_lock);
+void ta_cond_destroy(tacond_t *cond) {//no memory allocated through malloc - does not need destruction
 }
 
 void ta_wait(talock_t *mutex, tacond_t *cond) {
 
+	assert(mutex != NULL);
+	assert(cond != NULL);
+
+	cond->partner_lock = mutex;
 	struct node *current_thread = list_pop(ready);
 	assert(current_thread != NULL);
-	list_append_node(current_thread, cond->queue);
+	list_append_node(current_thread, mutex->binary_sem.queue);
 	ta_unlock(mutex);
+
 	if(!list_empty(ready)){
 		swapcontext(current_thread->threadContext, list_last(ready)->threadContext);
 	}
 	else{
 		swapcontext(current_thread->threadContext, &mainthread);
 	}
-	ta_lock(mutex);
 
-	//ma
+	ta_lock(mutex);
 
 }
 
 void ta_signal(tacond_t *cond) {
-	if(!list_empty(cond->queue)){
-		struct node *waken = list_pop(cond->queue);
+
+	if(!list_empty((cond->partner_lock->binary_sem).queue)){
+		struct node *waken = list_pop( (cond->partner_lock->binary_sem).queue );
 		assert(waken != NULL);
 		list_append_node(waken, ready);
-	}
+	}//end if
 
-}
+}//end method
 
 

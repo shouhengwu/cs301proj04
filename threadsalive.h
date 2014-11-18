@@ -1,6 +1,3 @@
-/*
- * 
- */
 
 #ifndef __THREADSALIVE_H__
 #define __THREADSALIVE_H__
@@ -24,12 +21,11 @@ typedef struct {
 
 typedef struct {
 	tasem_t binary_sem;
-
 } talock_t;
 
 typedef struct {
 
-	struct talock_t *partner_lock;
+	talock_t *partner_lock;
 
 } tacond_t;
 
